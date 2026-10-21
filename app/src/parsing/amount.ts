@@ -10,7 +10,8 @@ export function parseAmount(raw: string | undefined | null): number | undefined 
   if (raw == null) return undefined;
   let s = raw.trim().replace(/[A-Za-z$€£\s]/g, '').replace(/\//g, '');
   // Puntuación suelta en los bordes (p.ej. "87.90." al final de la oración).
-  s = s.replace(/^[.,]+|[.,]+$/g, '');
+  // Un separador inicial único sí vale: ".50" / ",50" son decimales.
+  s = s.replace(/^[.,]{2,}/, '').replace(/[.,]+$/, '');
   if (!s) return undefined;
 
   const lastDot = s.lastIndexOf('.');

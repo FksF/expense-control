@@ -22,12 +22,12 @@ function appLabel(pkg: string): string {
   return KNOWN_APPS[pkg] ?? pkg;
 }
 
-// El export solo incluye paquetes bancarios/conocidos: el corpus puede tener
-// notificaciones personales (WhatsApp, SMS) que no deben compartirse.
-const BANK_TOKENS = /yape|plin|wallet|bcp|bbva|interbank|mercado|bank|pago|tunki|lukita|agora/i;
-
+// El export solo incluye paquetes bancarios conocidos (lista cerrada): el
+// corpus puede tener notificaciones personales (WhatsApp, SMS) que no deben
+// compartirse. Si aparece un banco con paquete desconocido, se agrega a
+// KNOWN_APPS — la lista de la pantalla muestra todas las capturas.
 function isBankPackage(pkg: string): boolean {
-  return pkg in KNOWN_APPS || BANK_TOKENS.test(pkg);
+  return pkg in KNOWN_APPS;
 }
 
 export default function CaptureScreen() {
@@ -68,7 +68,10 @@ export default function CaptureScreen() {
   }
 
   const onExport = async () => {
-    const corpus = captures.filter((c) => isBankPackage(c.packageName));
+    // Releer en el momento: pueden haber llegado notificaciones con la pantalla abierta.
+    const corpus = (await Collector.listCaptures()).filter((c) =>
+      isBankPackage(c.packageName),
+    );
     if (corpus.length === 0) {
       Alert.alert(
         'Sin capturas bancarias',

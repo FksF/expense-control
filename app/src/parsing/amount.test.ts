@@ -21,6 +21,12 @@ describe('parseAmount', () => {
     expect(parseAmount('1.234.567')).toBe(1234567);
   });
 
+  it('separador decimal inicial se conserva', () => {
+    expect(parseAmount('.50')).toBe(0.5);
+    expect(parseAmount(',50')).toBe(0.5);
+    expect(parseAmount('S/ .50')).toBe(0.5);
+  });
+
   it('puntuación de oración al final no infla el monto', () => {
     expect(parseAmount('87.90.')).toBe(87.9);
     expect(parseAmount('87,90,')).toBe(87.9);
