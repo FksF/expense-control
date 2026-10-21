@@ -36,6 +36,14 @@ describe('categorize', () => {
     ];
     expect(categorize(tx('METRO LIMA'), rules).matchedRuleId).toBe('b');
   });
+
+  it('una corrección learned gana a la semilla aunque tenga menos hits', () => {
+    // El usuario corrige "Uber Eats" → comida; la semilla Uber→transporte (10 hits) no debe volver a ganar.
+    const learned = learnRule('Uber Eats', 'comida', SEED_CATEGORY_RULES);
+    const rules = [...SEED_CATEGORY_RULES, learned];
+    expect(categorize(tx('UBER EATS'), rules).categoryId).toBe('comida');
+    expect(categorize(tx('UBER EATS'), rules).matchedRuleId).toBe(learned.id);
+  });
 });
 
 describe('learnRule', () => {

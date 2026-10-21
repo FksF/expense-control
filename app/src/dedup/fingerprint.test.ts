@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { fingerprint, looseFingerprint, mergeTransactions, normalizeCounterparty } from './fingerprint';
+import {
+  DEDUP_BUCKET_MS,
+  fingerprint,
+  fingerprintCandidates,
+  isSameOperation,
+  looseFingerprint,
+  looseFingerprintCandidates,
+  mergeTransactions,
+  normalizeCounterparty,
+} from './fingerprint';
 import type { ParsedTransaction } from '../parsing/types';
 
 const base: ParsedTransaction = {
@@ -44,6 +53,33 @@ describe('fingerprint', () => {
   it('loose fingerprint cruza evento sin monto con versión con monto', () => {
     const sinMonto = { ...base, amount: undefined };
     expect(looseFingerprint(sinMonto)).toBe(looseFingerprint(base));
+  });
+
+  it('moneda distinta → huellas distintas', () => {
+    expect(fingerprint(base)).not.toBe(fingerprint({ ...base, currency: 'USD' }));
+    expect(looseFingerprint(base)).not.toBe(looseFingerprint({ ...base, currency: 'USD' }));
+  });
+
+  it('a cada lado del corte de bucket: candidatos solapan e isSameOperation confirma', () => {
+    // 12:04:59 vs 12:05:01 de la misma operación → buckets distintos
+    const boundary = Math.ceil(base.occurredAt / DEDUP_BUCKET_MS) * DEDUP_BUCKET_MS;
+    const before = { ...base, occurredAt: boundary - 1000 };
+    const after = { ...base, occurredAt: boundary + 1000 };
+    expect(fingerprint(before)).not.toBe(fingerprint(after));
+    // Pero el evento posterior sí encuentra la huella anterior entre sus candidatos
+    expect(fingerprintCandidates(after)).toContain(fingerprint(before));
+    expect(isSameOperation(before, after)).toBe(true);
+    expect(looseFingerprintCandidates(after)).toContain(looseFingerprint(before));
+  });
+
+  it('isSameOperation rechaza operaciones distintas', () => {
+    expect(isSameOperation(base, { ...base, currency: 'USD' })).toBe(false);
+    expect(isSameOperation(base, { ...base, amount: 99 })).toBe(false);
+    expect(isSameOperation(base, { ...base, counterparty: 'Otro' })).toBe(false);
+    expect(isSameOperation(base, { ...base, direction: 'in' })).toBe(false);
+    expect(
+      isSameOperation(base, { ...base, occurredAt: base.occurredAt + 6 * 60_000 }),
+    ).toBe(false);
   });
 });
 

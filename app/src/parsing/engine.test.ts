@@ -96,6 +96,19 @@ describe('parseEvent — formatos estimados (validar con corpus Fase 0)', () => 
     expect(tx!.counterparty).toContain('STARBUCKS');
   });
 
+  it('prefiere bigText sobre text truncado', () => {
+    const tx = parseEvent(
+      ev({
+        packageName: 'com.bcp.innovacxion.yapeapp',
+        title: 'Yape',
+        text: 'Yapeaste S/ 15.00 a Juan P...',
+        bigText: 'Yapeaste S/ 15.00 a Juan Perez Garcia',
+      }),
+      SEED_RULES,
+    );
+    expect(tx!.counterparty).toBe('Juan Perez Garcia');
+  });
+
   it('devuelve null cuando ninguna regla casa', () => {
     const tx = parseEvent(
       ev({

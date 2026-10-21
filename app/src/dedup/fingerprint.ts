@@ -24,23 +24,77 @@ function fnv1a(input: string): string {
   return h.toString(16).padStart(16, '0');
 }
 
+type FingerprintInput = Pick<
+  ParsedTransaction,
+  'amount' | 'occurredAt' | 'counterparty' | 'direction' | 'currency'
+>;
+type LooseFingerprintInput = Pick<
+  ParsedTransaction,
+  'occurredAt' | 'counterparty' | 'direction' | 'currency'
+>;
+
+function bucketIndex(occurredAt: number): number {
+  return Math.floor(occurredAt / DEDUP_BUCKET_MS);
+}
+
+function fingerprintAt(tx: FingerprintInput, bucket: number): string {
+  const amount = tx.amount != null ? tx.amount.toFixed(2) : 'na';
+  const who = normalizeCounterparty(tx.counterparty);
+  const ccy = tx.currency.toLowerCase();
+  return fnv1a(`${amount}|${ccy}|${bucket}|${who}|${tx.direction}`);
+}
+
+function looseFingerprintAt(tx: LooseFingerprintInput, bucket: number): string {
+  const who = normalizeCounterparty(tx.counterparty);
+  const ccy = tx.currency.toLowerCase();
+  return fnv1a(`loose|${ccy}|${bucket}|${who}|${tx.direction}`);
+}
+
 /**
  * Huella de deduplicación multi-fuente: la misma operación puede llegar por
- * notificación, SMS y correo. Monto ausente (wallet sin monto) forma su propia
- * huella por contraparte+tiempo y se fusiona cuando llega la versión con monto.
+ * notificación, SMS y correo. La huella es clave de búsqueda, no prueba de
+ * igualdad: dos eventos a cada lado del corte de 5 min tienen huellas
+ * distintas pero son la misma operación. Usa fingerprintCandidates para
+ * localizar candidatos y isSameOperation para confirmar.
  */
-export function fingerprint(tx: Pick<ParsedTransaction, 'amount' | 'occurredAt' | 'counterparty' | 'direction'>): string {
-  const amount = tx.amount != null ? tx.amount.toFixed(2) : 'na';
-  const bucket = Math.floor(tx.occurredAt / DEDUP_BUCKET_MS);
-  const who = normalizeCounterparty(tx.counterparty);
-  return fnv1a(`${amount}|${bucket}|${who}|${tx.direction}`);
+export function fingerprint(tx: FingerprintInput): string {
+  return fingerprintAt(tx, bucketIndex(tx.occurredAt));
+}
+
+/** Huellas en los buckets adyacentes (b-1, b, b+1) para localizar candidatos. */
+export function fingerprintCandidates(tx: FingerprintInput): string[] {
+  const b = bucketIndex(tx.occurredAt);
+  return [b - 1, b, b + 1].map((bucket) => fingerprintAt(tx, bucket));
 }
 
 /** Huella relajada sin monto — cruza el evento sin monto con la versión que sí lo trae. */
-export function looseFingerprint(tx: Pick<ParsedTransaction, 'occurredAt' | 'counterparty' | 'direction'>): string {
-  const bucket = Math.floor(tx.occurredAt / DEDUP_BUCKET_MS);
-  const who = normalizeCounterparty(tx.counterparty);
-  return fnv1a(`loose|${bucket}|${who}|${tx.direction}`);
+export function looseFingerprint(tx: LooseFingerprintInput): string {
+  return looseFingerprintAt(tx, bucketIndex(tx.occurredAt));
+}
+
+export function looseFingerprintCandidates(tx: LooseFingerprintInput): string[] {
+  const b = bucketIndex(tx.occurredAt);
+  return [b - 1, b, b + 1].map((bucket) => looseFingerprintAt(tx, bucket));
+}
+
+/**
+ * Confirmación de dedup: compara los campos reales dentro de la ventana
+ * exacta de 5 min. Cubre el caso de dos reportes de la misma operación
+ * separados por el corte de bucket (12:04:59 vs 12:05:01).
+ * También sirve como match relajado: si falta el monto en un lado, no se compara.
+ */
+export function isSameOperation(a: ParsedTransaction, b: ParsedTransaction): boolean {
+  if (a.direction !== b.direction) return false;
+  if (a.currency && b.currency && a.currency.toLowerCase() !== b.currency.toLowerCase()) {
+    return false;
+  }
+  if (a.amount != null && b.amount != null && Math.abs(a.amount - b.amount) > 0.005) {
+    return false;
+  }
+  if (normalizeCounterparty(a.counterparty) !== normalizeCounterparty(b.counterparty)) {
+    return false;
+  }
+  return Math.abs(a.occurredAt - b.occurredAt) <= DEDUP_BUCKET_MS;
 }
 
 /**

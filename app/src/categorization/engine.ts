@@ -25,8 +25,10 @@ export interface CategorizationResult {
 }
 
 /**
- * Asigna categoría por reglas comercio→categoría. La regla con más hits gana:
- * lo que el usuario corrige más pesa más.
+ * Asigna categoría por reglas comercio→categoría.
+ * Prioridad: patrón más específico (más largo) → regla 'learned' sobre 'seed'
+ * → más hits. Así una corrección explícita del usuario gana siempre a la
+ * semilla genérica para ese comercio.
  */
 export function categorize(
   tx: ParsedTransaction,
@@ -34,10 +36,17 @@ export function categorize(
 ): CategorizationResult {
   const who = normalizeCounterparty(tx.counterparty);
   let best: CategoryRule | null = null;
+  let bestLen = 0;
   for (const rule of rules) {
     const p = normalizeCounterparty(rule.pattern);
-    if (p && who.includes(p)) {
-      if (!best || rule.hits > best.hits) best = rule;
+    if (!p || !who.includes(p)) continue;
+    const moreSpecific = p.length > bestLen;
+    const sameLength = p.length === bestLen;
+    const learnedWins = sameLength && rule.origin === 'learned' && best?.origin !== 'learned';
+    const moreHits = sameLength && rule.origin === best?.origin && rule.hits > (best?.hits ?? 0);
+    if (!best || moreSpecific || learnedWins || moreHits) {
+      best = rule;
+      bestLen = p.length;
     }
   }
   return { categoryId: best?.categoryId ?? null, matchedRuleId: best?.id ?? null };

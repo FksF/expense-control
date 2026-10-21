@@ -26,7 +26,20 @@ export function transactionConfirmedEvent(tx: Transaction): Omit<OutboxEvent, 'i
   };
 }
 
-/** Selecciona los eventos listos para enviar; el caller marca attempts/nextRetryAt al fallar. */
+/**
+ * Eventos que llevan muchos intentos fallidos. No salen de la cola — se
+ * siguen reintentando con el delay tope — pero la capa de datos puede
+ * marcarlos para revisión en la UI.
+ */
+export function isExhausted(e: OutboxEvent): boolean {
+  return e.attempts >= MAX_ATTEMPTS;
+}
+
+/**
+ * Selecciona los eventos listos para enviar; el caller marca
+ * attempts/nextRetryAt al fallar. No hay corte por intentos: un corte
+ * permanente dejaría transacciones sin sincronizar tras un apagón largo.
+ */
 export function dueEvents(events: OutboxEvent[], now = Date.now()): OutboxEvent[] {
-  return events.filter((e) => e.attempts < MAX_ATTEMPTS && e.nextRetryAt <= now);
+  return events.filter((e) => e.nextRetryAt <= now);
 }

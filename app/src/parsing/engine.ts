@@ -33,7 +33,8 @@ export function parseEvent(
     .filter((r) => r.app === event.packageName)
     .sort((a, b) => b.version - a.version);
 
-  const haystacks = [event.text, event.bigText].filter(
+  // bigText (cuerpo expandido) primero: text puede venir truncado ("Juan P...")
+  const haystacks = [event.bigText, event.text].filter(
     (s): s is string => typeof s === 'string' && s.length > 0,
   );
 
