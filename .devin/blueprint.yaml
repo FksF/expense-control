@@ -1,0 +1,19 @@
+# https://docs.devin.ai/onboard-devin/environment-yaml
+# Expo SDK 58 requiere Node ^22.13 || ^24.3 || ^26
+initialize: |
+  curl -fsSL https://nodejs.org/dist/v24.10.0/node-v24.10.0-linux-x64.tar.xz | sudo tar -xJ -C /usr/local --strip-components=1
+maintenance: |
+  (cd app && npm install)
+knowledge:
+  - name: lint
+    contents: |
+      # cd app && npx expo lint
+  - name: test
+    contents: |
+      # cd app && npx vitest run
+  - name: typecheck
+    contents: |
+      # cd app && npx tsc --noEmit
+  - name: notes
+    contents: |
+      # Usa `npx expo install <pkg>` (nunca npm add) para dependencias con código nativo. Ver app/AGENTS.md.
