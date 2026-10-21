@@ -65,6 +65,23 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="capture"
+        options={{
+          title: 'Captura',
+          tabBarIcon: ({ color }) => (
+            <SymbolView
+              name={{
+                ios: 'bell.badge',
+                android: 'notifications',
+                web: 'notifications',
+              }}
+              tintColor={color}
+              size={28}
+            />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
