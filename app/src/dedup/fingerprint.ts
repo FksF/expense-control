@@ -82,9 +82,13 @@ export function looseFingerprintCandidates(tx: LooseFingerprintInput): string[] 
  * exacta de 5 min. Cubre el caso de dos reportes de la misma operación
  * separados por el corte de bucket (12:04:59 vs 12:05:01).
  * También sirve como match relajado: si falta el monto en un lado, no se compara.
+ * Pero si AMBOS lados carecen de monto (p.ej. dos notificaciones de wallet en
+ * el mismo comercio), no hay evidencia de que sea una sola compra: se
+ * conservan como pendientes separadas hasta que llegue una fuente con monto.
  */
 export function isSameOperation(a: ParsedTransaction, b: ParsedTransaction): boolean {
   if (a.direction !== b.direction) return false;
+  if (a.amount == null && b.amount == null) return false;
   if (a.currency && b.currency && a.currency.toLowerCase() !== b.currency.toLowerCase()) {
     return false;
   }

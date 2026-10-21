@@ -62,6 +62,13 @@ export function learnRule(
   existing: CategoryRule[],
 ): CategoryRule {
   const pattern = normalizeCounterparty(counterparty);
+  // Si ya hay corrección learned para este patrón, se ACTUALIZA su categoría:
+  // así restaurar la categoría semilla también funciona (learned sigue ganando
+  // pero ahora apunta a la categoría restaurada).
+  const learned = existing.find(
+    (r) => r.origin === 'learned' && normalizeCounterparty(r.pattern) === pattern,
+  );
+  if (learned) return { ...learned, categoryId, hits: learned.hits + 1 };
   const found = existing.find(
     (r) => normalizeCounterparty(r.pattern) === pattern && r.categoryId === categoryId,
   );

@@ -72,6 +72,16 @@ describe('fingerprint', () => {
     expect(looseFingerprintCandidates(after)).toContain(looseFingerprint(before));
   });
 
+  it('dos eventos sin monto del mismo comercio no son la misma operación', () => {
+    // Dos compras wallet sin monto en 5 min: pendientes separadas hasta que
+    // una fuente con monto identifique cada operación.
+    const sinMonto = { ...base, amount: undefined };
+    const otraSinMonto = { ...base, amount: undefined, occurredAt: base.occurredAt + 60_000 };
+    expect(isSameOperation(sinMonto, otraSinMonto)).toBe(false);
+    // Pero sin-monto vs con-monto sí cruza (match tentativo)
+    expect(isSameOperation(sinMonto, { ...base, occurredAt: base.occurredAt + 60_000 })).toBe(true);
+  });
+
   it('isSameOperation rechaza operaciones distintas', () => {
     expect(isSameOperation(base, { ...base, currency: 'USD' })).toBe(false);
     expect(isSameOperation(base, { ...base, amount: 99 })).toBe(false);
