@@ -16,9 +16,14 @@ object CaptureStore {
   const val FILE_NAME = "notification-captures.jsonl"
   // Tope de seguridad para no crecer sin límite en el teléfono del usuario.
   const val MAX_LINES = 5000
+  // El trim (lectura completa del archivo) solo corre cada N notificaciones,
+  // no en cada callback del listener.
+  private const val TRIM_CHECK_INTERVAL = 100
+  private var linesSinceCheck = 0
 
   fun file(context: Context): File = File(context.filesDir, FILE_NAME)
 
+  @Synchronized
   fun record(context: Context, sbn: StatusBarNotification) {
     val extras = sbn.notification?.extras
     val record = JSONObject()
@@ -45,7 +50,22 @@ object CaptureStore {
     }
     val f = file(context)
     f.appendText(record.toString() + "\n")
-    trimIfNeeded(f)
+    if (++linesSinceCheck >= TRIM_CHECK_INTERVAL) {
+      linesSinceCheck = 0
+      trimIfNeeded(f)
+    }
+  }
+
+  @Synchronized
+  fun read(context: Context): String {
+    val f = file(context)
+    return if (f.exists()) f.readText() else ""
+  }
+
+  @Synchronized
+  fun clear(context: Context) {
+    file(context).delete()
+    linesSinceCheck = 0
   }
 
   private fun trimIfNeeded(f: File) {

@@ -21,6 +21,12 @@ describe('parseAmount', () => {
     expect(parseAmount('1.234.567')).toBe(1234567);
   });
 
+  it('puntuación de oración al final no infla el monto', () => {
+    expect(parseAmount('87.90.')).toBe(87.9);
+    expect(parseAmount('87,90,')).toBe(87.9);
+    expect(parseAmount('S/ 87.90.')).toBe(87.9);
+  });
+
   it('entradas inválidas → undefined', () => {
     expect(parseAmount('')).toBeUndefined();
     expect(parseAmount(null)).toBeUndefined();

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
-import { Alert, FlatList, Platform, Pressable, StyleSheet } from 'react-native';
+import { Alert, AppState, FlatList, Platform, Pressable, StyleSheet } from 'react-native';
 import * as Sharing from 'expo-sharing';
+import { File, Paths } from 'expo-file-system';
 import { useFocusEffect } from 'expo-router';
 
 import { Text, View } from '@/components/Themed';
@@ -21,6 +22,14 @@ function appLabel(pkg: string): string {
   return KNOWN_APPS[pkg] ?? pkg;
 }
 
+// El export solo incluye paquetes bancarios/conocidos: el corpus puede tener
+// notificaciones personales (WhatsApp, SMS) que no deben compartirse.
+const BANK_TOKENS = /yape|plin|wallet|bcp|bbva|interbank|mercado|bank|pago|tunki|lukita|agora/i;
+
+function isBankPackage(pkg: string): boolean {
+  return pkg in KNOWN_APPS || BANK_TOKENS.test(pkg);
+}
+
 export default function CaptureScreen() {
   const [granted, setGranted] = useState(false);
   const [captures, setCaptures] = useState<CaptureRecord[]>([]);
@@ -32,10 +41,16 @@ export default function CaptureScreen() {
     setGranted(Collector.isGranted());
   }, []);
 
-  // Carga inicial + relectura al volver de los ajustes de Android.
+  // Carga inicial + relectura al volver de los ajustes de Android:
+  // el tab sigue con foco de navegación, así que también escuchamos
+  // el retorno de la app a primer plano (AppState → active).
   useFocusEffect(
     useCallback(() => {
       refresh();
+      const sub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') refresh();
+      });
+      return () => sub.remove();
     }, [refresh]),
   );
 
@@ -53,13 +68,21 @@ export default function CaptureScreen() {
   }
 
   const onExport = async () => {
-    const path = Collector.captureFilePath();
-    if (!path) {
-      Alert.alert('Sin capturas', 'Todavía no hay archivo de capturas.');
+    const corpus = captures.filter((c) => isBankPackage(c.packageName));
+    if (corpus.length === 0) {
+      Alert.alert(
+        'Sin capturas bancarias',
+        'Todavía no hay notificaciones de Yape/Plin/bancos/wallets para exportar.',
+      );
       return;
     }
+    // Se exporta un archivo filtrado, no el JSONL crudo con notificaciones personales.
+    const out = new File(Paths.cache, 'corpus-notificaciones.jsonl');
+    if (out.exists) out.delete();
+    out.create();
+    await out.write(corpus.map((c) => JSON.stringify(c)).join('\n') + '\n');
     if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(path, {
+      await Sharing.shareAsync(out.uri, {
         mimeType: 'application/json',
         dialogTitle: 'Exportar corpus de notificaciones',
       });
@@ -105,7 +128,9 @@ export default function CaptureScreen() {
 
       <FlatList
         data={captures}
-        keyExtractor={(item, i) => item.key ?? `${item.packageName}-${item.postTime}-${i}`}
+        keyExtractor={(item, i) =>
+          `${item.packageName}-${item.postTime}-${item.receivedAt}-${i}`
+        }
         renderItem={({ item }) => (
           <View style={styles.card}>
             <Text style={styles.cardApp}>

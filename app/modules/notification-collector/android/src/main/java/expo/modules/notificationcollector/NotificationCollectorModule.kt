@@ -33,18 +33,20 @@ class NotificationCollectorModule : Module() {
     // Contenido crudo del JSONL de capturas (lo parsea la capa JS).
     AsyncFunction("readCaptures") {
       val ctx = appContext.reactContext ?: return@AsyncFunction ""
-      val f = CaptureStore.file(ctx)
-      if (f.exists()) f.readText() else ""
+      CaptureStore.read(ctx)
     }
 
     AsyncFunction("clearCaptures") {
       val ctx = appContext.reactContext ?: return@AsyncFunction
-      CaptureStore.file(ctx).delete()
+      CaptureStore.clear(ctx)
     }
 
+    // Ruta del JSONL — vacío si aún no existe (evita compartir un archivo
+    // inexistente antes de la primera captura).
     Function("captureFilePath") {
       val ctx = appContext.reactContext ?: return@Function ""
-      CaptureStore.file(ctx).absolutePath
+      val f = CaptureStore.file(ctx)
+      if (f.exists()) f.absolutePath else ""
     }
   }
 }

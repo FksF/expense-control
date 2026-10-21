@@ -47,6 +47,17 @@ describe('categorize', () => {
 });
 
 describe('learnRule', () => {
+  it('corregir de vuelta a la categoría semilla restaura la semilla', () => {
+    // Uber→comida, luego de vuelta a transporte (la semilla): debe ganar transporte.
+    const toComida = learnRule('Uber', 'comida', SEED_CATEGORY_RULES);
+    const restored = learnRule('Uber', 'transporte', [...SEED_CATEGORY_RULES, toComida]);
+    // `restored` reemplaza a la learned anterior (mismo patrón y mismo id).
+    const rules = [...SEED_CATEGORY_RULES, restored];
+    expect(restored.id).toBe(toComida.id);
+    expect(restored.categoryId).toBe('transporte');
+    expect(categorize(tx('UBER'), rules).categoryId).toBe('transporte');
+  });
+
   it('crea regla learned nueva', () => {
     const r = learnRule('Bodega Don Pepe', 'comida', SEED_CATEGORY_RULES);
     expect(r.origin).toBe('learned');
