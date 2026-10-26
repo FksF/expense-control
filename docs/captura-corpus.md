@@ -19,7 +19,23 @@ evidencia en vez de suposiciones.
 
 ## Build del APK
 
-El colector usa código nativo: **no corre en Expo Go**. Se construye con EAS:
+El colector usa código nativo: **no corre en Expo Go**. Hay dos rutas para
+generar el APK:
+
+### Opción A — Build local (recomendada, sin cuenta Expo)
+
+Requiere Android Studio + JDK 17 en la Mac:
+
+```bash
+cd app
+npx expo run:android --variant release
+```
+
+El APK queda en `android/app/build/outputs/apk/release/app-release.apk` y se
+pasa al Android prestado por cable, Drive, WhatsApp, etc. La carpeta
+`android/` generada por el prebuild es local y no se commitea.
+
+### Opción B — EAS (build en la nube)
 
 ```bash
 cd app
