@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -34,7 +33,8 @@ export default function AddExpenseScreen() {
     if (!userPicked) setCategoryId(undefined);
   };
 
-  const onCounterpartyEnd = () => {
+  // onBlur (no onEndEditing): RNW no invoca onEndEditing, onBlur cubre web y nativo.
+  const onCounterpartyBlur = () => {
     if (userPicked || categoryId) return;
     const suggested = suggestCategory(counterparty);
     if (suggested) setCategoryId(suggested);
@@ -45,12 +45,15 @@ export default function AddExpenseScreen() {
     setCategoryId(categoryId === id ? undefined : id);
   };
 
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   const onSave = async () => {
     const amount = parseAmount(amountText);
     if (amount == null || amount <= 0) {
-      Alert.alert('Monto inválido', 'Ingresa un monto mayor a cero, p. ej. 25.90');
+      setErrorMsg('Ingresa un monto mayor a cero, p. ej. 25.90');
       return;
     }
+    setErrorMsg(null);
     const name = counterparty.trim() || 'Gasto manual';
     setSaving(true);
     try {
@@ -65,7 +68,8 @@ export default function AddExpenseScreen() {
       });
       router.back();
     } catch {
-      Alert.alert('No se pudo guardar', 'El gasto no quedó registrado. Intenta de nuevo.');
+      // Inline, no Alert.alert: es no-op en react-native-web.
+      setErrorMsg('No se pudo guardar. Intenta de nuevo.');
     } finally {
       setSaving(false);
     }
@@ -123,7 +127,7 @@ export default function AddExpenseScreen() {
           style={[styles.input, { color: inputColor }]}
           value={counterparty}
           onChangeText={onCounterpartyChange}
-          onEndEditing={onCounterpartyEnd}
+          onBlur={onCounterpartyBlur}
           placeholder="p. ej. Plaza Vea, María, Uber"
           placeholderTextColor="#999"
         />
@@ -141,6 +145,8 @@ export default function AddExpenseScreen() {
             </Pressable>
           ))}
         </View>
+
+        {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
         <Pressable
           style={[styles.saveButton, saving && styles.saveDisabled]}
@@ -241,6 +247,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 24,
+  },
+  errorText: {
+    color: '#d64545',
+    fontSize: 13,
+    marginTop: 12,
   },
   saveDisabled: {
     opacity: 0.6,
