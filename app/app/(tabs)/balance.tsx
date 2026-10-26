@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet } from 'react-native';
+import { Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 
 import { Text, View } from '@/components/Themed';
@@ -7,6 +7,7 @@ import { DEFAULT_CATEGORIES } from '@/src/categorization/seed';
 import { getTransactions, initStore, subscribe } from '@/src/data/store';
 import type { Transaction } from '@/src/data/schema';
 import {
+  monthCurrencies,
   monthKey,
   monthLabel,
   monthTotals,
@@ -27,15 +28,23 @@ export default function BalanceScreen() {
     }, []),
   );
 
-  const rows = useMemo(
-    () => totalsByCategory(all, month, DEFAULT_CATEGORIES),
+  // Totales separados por moneda: sin tipo de cambio no se mezclan S/ y $.
+  const sections = useMemo(
+    () =>
+      monthCurrencies(all, month).map((currency) => {
+        const totals = monthTotals(all, month, currency);
+        return {
+          currency,
+          balance: totals.income - totals.expenses,
+          expenses: totals.expenses,
+          rows: totalsByCategory(all, month, DEFAULT_CATEGORIES, currency),
+        };
+      }),
     [all, month],
   );
-  const totals = useMemo(() => monthTotals(all, month), [all, month]);
-  const balance = totals.income - totals.expenses;
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.monthRow}>
         <Pressable onPress={() => setMonth((m) => shiftMonth(m, -1))} style={styles.monthNav}>
           <Text style={styles.monthNavText}>‹</Text>
@@ -46,46 +55,53 @@ export default function BalanceScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.balanceBox}>
-        <Text style={styles.totalLabel}>Balance del mes</Text>
-        <Text
-          style={[
-            styles.balanceValue,
-            balance >= 0 ? styles.incomeColor : styles.expenseColor,
-          ]}>
-          {formatMoney(balance, 'PEN')}
-        </Text>
-      </View>
+      {sections.length === 0 && (
+        <Text style={styles.muted}>Sin gastos categorizados este mes.</Text>
+      )}
 
-      <FlatList
-        data={rows}
-        keyExtractor={(item) => item.categoryId}
-        renderItem={({ item }) => {
-          const pct =
-            totals.expenses > 0 ? Math.round((item.total / totals.expenses) * 100) : 0;
-          return (
-            <View style={styles.card}>
-              <View style={styles.cardMain}>
-                <Text style={styles.cardTitle}>{item.name}</Text>
-                <Text style={styles.muted}>
-                  {item.count} {item.count === 1 ? 'operación' : 'operaciones'} · {pct}%
+      {sections.map((section) => (
+        <View key={section.currency}>
+          <View style={styles.balanceBox}>
+            <Text style={styles.totalLabel}>Balance del mes ({section.currency})</Text>
+            <Text
+              style={[
+                styles.balanceValue,
+                section.balance >= 0 ? styles.incomeColor : styles.expenseColor,
+              ]}>
+              {formatMoney(section.balance, section.currency)}
+            </Text>
+          </View>
+
+          {section.rows.map((item) => {
+            const pct =
+              section.expenses > 0
+                ? Math.round((item.total / section.expenses) * 100)
+                : 0;
+            return (
+              <View key={item.categoryId} style={styles.card}>
+                <View style={styles.cardMain}>
+                  <Text style={styles.cardTitle}>{item.name}</Text>
+                  <Text style={styles.muted}>
+                    {item.count} {item.count === 1 ? 'operación' : 'operaciones'} · {pct}%
+                  </Text>
+                </View>
+                <Text style={styles.cardAmount}>
+                  {formatMoney(item.total, section.currency)}
                 </Text>
               </View>
-              <Text style={styles.cardAmount}>{formatMoney(item.total, 'PEN')}</Text>
-            </View>
-          );
-        }}
-        ListEmptyComponent={
-          <Text style={styles.muted}>Sin gastos categorizados este mes.</Text>
-        }
-      />
-    </View>
+            );
+          })}
+        </View>
+      ))}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  content: {
     padding: 16,
   },
   monthRow: {

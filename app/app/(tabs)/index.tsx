@@ -11,7 +11,13 @@ import {
   subscribe,
 } from '@/src/data/store';
 import type { Transaction } from '@/src/data/schema';
-import { monthKey, monthLabel, monthTotals, shiftMonth } from '@/src/data/summary';
+import {
+  monthCurrencies,
+  monthKey,
+  monthLabel,
+  monthTotals,
+  shiftMonth,
+} from '@/src/data/summary';
 import { formatMoney } from '@/src/ui/format';
 
 const CATEGORY_NAMES = new Map(DEFAULT_CATEGORIES.map((c) => [c.id, c.name]));
@@ -40,7 +46,14 @@ export default function ExpensesScreen() {
     [all, month],
   );
 
-  const totals = useMemo(() => monthTotals(all, month), [all, month]);
+  const totalsByCurrency = useMemo(
+    () =>
+      monthCurrencies(all, month).map((c) => ({
+        currency: c,
+        ...monthTotals(all, month, c),
+      })),
+    [all, month],
+  );
 
   const onDelete = (tx: Transaction) => {
     Alert.alert('Eliminar gasto', `¿Eliminar "${tx.counterparty}"?`, [
@@ -64,15 +77,29 @@ export default function ExpensesScreen() {
       <View style={styles.totalsRow}>
         <View style={styles.totalBox}>
           <Text style={styles.totalLabel}>Gastos</Text>
-          <Text style={[styles.totalValue, styles.expenseColor]}>
-            {formatMoney(totals.expenses, 'PEN')}
-          </Text>
+          {totalsByCurrency.length === 0 && (
+            <Text style={[styles.totalValue, styles.expenseColor]}>
+              {formatMoney(0, 'PEN')}
+            </Text>
+          )}
+          {totalsByCurrency.map((t) => (
+            <Text key={t.currency} style={[styles.totalValue, styles.expenseColor]}>
+              {formatMoney(t.expenses, t.currency)}
+            </Text>
+          ))}
         </View>
         <View style={styles.totalBox}>
           <Text style={styles.totalLabel}>Ingresos</Text>
-          <Text style={[styles.totalValue, styles.incomeColor]}>
-            {formatMoney(totals.income, 'PEN')}
-          </Text>
+          {totalsByCurrency.length === 0 && (
+            <Text style={[styles.totalValue, styles.incomeColor]}>
+              {formatMoney(0, 'PEN')}
+            </Text>
+          )}
+          {totalsByCurrency.map((t) => (
+            <Text key={t.currency} style={[styles.totalValue, styles.incomeColor]}>
+              {formatMoney(t.income, t.currency)}
+            </Text>
+          ))}
         </View>
       </View>
 

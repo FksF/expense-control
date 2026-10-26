@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  monthCurrencies,
   monthKey,
   monthLabel,
   monthTotals,
@@ -56,6 +57,30 @@ describe('monthTotals', () => {
       tx({ amount: 10, occurredAt: OCT, status: 'pending' }),
     ];
     expect(monthTotals(txs, '2026-10')).toEqual({ income: 40, expenses: 110 });
+  });
+});
+
+describe('monedas', () => {
+  it('monthCurrencies lista las monedas del mes con PEN primero', () => {
+    const txs = [
+      tx({ currency: 'USD', occurredAt: OCT }),
+      tx({ currency: 'pen', occurredAt: OCT }),
+      tx({ currency: 'EUR', occurredAt: SEP }),
+    ];
+    expect(monthCurrencies(txs, '2026-10')).toEqual(['PEN', 'USD']);
+  });
+
+  it('los totales no mezclan monedas', () => {
+    const txs = [
+      tx({ amount: 100, currency: 'PEN', occurredAt: OCT }),
+      tx({ amount: 100, currency: 'USD', occurredAt: OCT }),
+      tx({ amount: 5, currency: 'USD', direction: 'in', occurredAt: OCT }),
+    ];
+    expect(monthTotals(txs, '2026-10', 'PEN')).toEqual({ income: 0, expenses: 100 });
+    expect(monthTotals(txs, '2026-10', 'USD')).toEqual({ income: 5, expenses: 100 });
+    expect(
+      totalsByCategory(txs, '2026-10', [], 'USD').reduce((s, r) => s + r.total, 0),
+    ).toBe(100);
   });
 });
 

@@ -23,13 +23,26 @@ export default function AddExpenseScreen() {
   const [direction, setDirection] = useState<'out' | 'in'>('out');
   const [counterparty, setCounterparty] = useState('');
   const [categoryId, setCategoryId] = useState<string | undefined>();
+  /** true solo si el usuario tocó un chip; la autosugerencia no marca esto. */
+  const [userPicked, setUserPicked] = useState(false);
   const [saving, setSaving] = useState(false);
   const inputColor = useThemeColor({}, 'text');
 
+  const onCounterpartyChange = (text: string) => {
+    setCounterparty(text);
+    // Si la categoría era autosugerida, se invalida con el nuevo comercio.
+    if (!userPicked) setCategoryId(undefined);
+  };
+
   const onCounterpartyEnd = () => {
-    if (categoryId) return;
+    if (userPicked || categoryId) return;
     const suggested = suggestCategory(counterparty);
     if (suggested) setCategoryId(suggested);
+  };
+
+  const onPickCategory = (id: string) => {
+    setUserPicked(true);
+    setCategoryId(categoryId === id ? undefined : id);
   };
 
   const onSave = async () => {
@@ -48,8 +61,11 @@ export default function AddExpenseScreen() {
         occurredAt: Date.now(),
         counterparty: name,
         categoryId,
+        categoryConfirmed: userPicked,
       });
       router.back();
+    } catch {
+      Alert.alert('No se pudo guardar', 'El gasto no quedó registrado. Intenta de nuevo.');
     } finally {
       setSaving(false);
     }
@@ -106,7 +122,7 @@ export default function AddExpenseScreen() {
         <TextInput
           style={[styles.input, { color: inputColor }]}
           value={counterparty}
-          onChangeText={setCounterparty}
+          onChangeText={onCounterpartyChange}
           onEndEditing={onCounterpartyEnd}
           placeholder="p. ej. Plaza Vea, María, Uber"
           placeholderTextColor="#999"
@@ -118,7 +134,7 @@ export default function AddExpenseScreen() {
             <Pressable
               key={c.id}
               style={[styles.chip, categoryId === c.id && styles.chipActive]}
-              onPress={() => setCategoryId(categoryId === c.id ? undefined : c.id)}>
+              onPress={() => onPickCategory(c.id)}>
               <Text style={[styles.chipText, categoryId === c.id && styles.chipTextActive]}>
                 {c.name}
               </Text>

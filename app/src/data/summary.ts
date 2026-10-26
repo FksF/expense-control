@@ -35,16 +35,36 @@ export function shiftMonth(key: string, delta: number): string {
   return `${Math.floor(total / 12)}-${`${(total % 12) + 1}`.padStart(2, '0')}`;
 }
 
-/** Totales de ingresos y gastos (confirmados o pendientes) del mes. */
+/**
+ * Monedas presentes en el mes (PEN primero). Los totales se agrupan por
+ * moneda: sin tipo de cambio configurado no se mezclan soles con dólares.
+ */
+export function monthCurrencies(txs: Transaction[], key: string): string[] {
+  const seen = new Set<string>();
+  for (const tx of txs) {
+    if (tx.status === 'dismissed') continue;
+    if (monthKey(new Date(tx.occurredAt)) !== key) continue;
+    seen.add(tx.currency.toUpperCase());
+  }
+  return [...seen].sort((a, b) => (a === 'PEN' ? -1 : b === 'PEN' ? 1 : a.localeCompare(b)));
+}
+
+function sameCurrency(tx: Transaction, currency?: string): boolean {
+  return currency == null || tx.currency.toUpperCase() === currency.toUpperCase();
+}
+
+/** Totales de ingresos y gastos (confirmados o pendientes) del mes, por moneda. */
 export function monthTotals(
   txs: Transaction[],
   key: string,
+  currency?: string,
 ): { income: number; expenses: number } {
   let income = 0;
   let expenses = 0;
   for (const tx of txs) {
     if (tx.status === 'dismissed') continue;
     if (monthKey(new Date(tx.occurredAt)) !== key) continue;
+    if (!sameCurrency(tx, currency)) continue;
     const amount = tx.amount ?? 0;
     if (tx.direction === 'in') income += amount;
     else expenses += amount;
@@ -59,17 +79,19 @@ export interface CategoryTotal {
   count: number;
 }
 
-/** Total de gastos por categoría en el mes, ordenado de mayor a menor. */
+/** Total de gastos por categoría en el mes, ordenado de mayor a menor. Por moneda. */
 export function totalsByCategory(
   txs: Transaction[],
   key: string,
   categories: Category[],
+  currency?: string,
 ): CategoryTotal[] {
   const names = new Map(categories.map((c) => [c.id, c.name]));
   const acc = new Map<string, CategoryTotal>();
   for (const tx of txs) {
     if (tx.status === 'dismissed' || tx.direction !== 'out') continue;
     if (monthKey(new Date(tx.occurredAt)) !== key) continue;
+    if (!sameCurrency(tx, currency)) continue;
     const id = tx.categoryId ?? 'otros';
     const row = acc.get(id) ?? {
       categoryId: id,

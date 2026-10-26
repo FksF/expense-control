@@ -23,7 +23,11 @@ interface Persisted {
 
 let transactions: Transaction[] = [];
 let learnedRules: CategoryRule[] = [];
-let initialized = false;
+
+/** Promesa compartida: todos los lectores/escritores esperan la misma carga. */
+let initPromise: Promise<void> | null = null;
+/** Cola de escrituras: cada corrida persiste el snapshot más reciente. */
+let writeChain: Promise<void> = Promise.resolve();
 
 const listeners = new Set<() => void>();
 
@@ -41,33 +45,45 @@ function storeFile(): File | null {
   return new File(Paths.document, STORE_FILE);
 }
 
-async function persist(): Promise<void> {
+/**
+ * Escribe el snapshot completo en un archivo temporal y lo mueve sobre el
+ * destino solo si la escritura terminó: un corte a mitad no deja el ledger
+ * borrado ni truncado. Las escrituras van en cadena para que una tardía no
+ * pise un estado más nuevo.
+ */
+function persist(): Promise<void> {
   const file = storeFile();
-  if (!file) return;
-  try {
-    if (file.exists) file.delete();
-    file.create();
-    await file.write(JSON.stringify({ transactions, learnedRules }));
-  } catch (e) {
-    console.warn('No se pudo persistir el store de gastos', e);
-  }
+  if (!file) return Promise.resolve();
+  const result = writeChain.then(async () => {
+    const tmp = new File(Paths.document, `${STORE_FILE}.tmp`);
+    if (tmp.exists) tmp.delete();
+    tmp.create();
+    await tmp.write(JSON.stringify({ transactions, learnedRules }));
+    await tmp.move(file, { overwrite: true });
+  });
+  // Una escritura fallida no bloquea las siguientes, pero sí le llega al caller.
+  writeChain = result.catch(() => {});
+  return result;
 }
 
-/** Carga inicial; segura de llamar varias veces. */
-export async function initStore(): Promise<void> {
-  if (initialized) return;
-  initialized = true;
-  const file = storeFile();
-  if (file && file.exists) {
-    try {
-      const parsed = JSON.parse(await file.text()) as Partial<Persisted>;
-      transactions = Array.isArray(parsed.transactions) ? parsed.transactions : [];
-      learnedRules = Array.isArray(parsed.learnedRules) ? parsed.learnedRules : [];
-    } catch (e) {
-      console.warn('Store de gastos corrupto; se empieza vacío', e);
-    }
+/** Carga inicial; segura de llamar varias veces (comparte la misma promesa). */
+export function initStore(): Promise<void> {
+  if (!initPromise) {
+    initPromise = (async () => {
+      const file = storeFile();
+      if (file && file.exists) {
+        try {
+          const parsed = JSON.parse(await file.text()) as Partial<Persisted>;
+          transactions = Array.isArray(parsed.transactions) ? parsed.transactions : [];
+          learnedRules = Array.isArray(parsed.learnedRules) ? parsed.learnedRules : [];
+        } catch (e) {
+          console.warn('Store de gastos corrupto; se empieza vacío', e);
+        }
+      }
+      notify();
+    })();
   }
-  notify();
+  return initPromise;
 }
 
 export function getTransactions(): Transaction[] {
@@ -103,6 +119,11 @@ export interface NewExpenseInput {
   occurredAt: number;
   counterparty: string;
   categoryId?: string;
+  /**
+   * true cuando el usuario eligió la categoría explícitamente (no una
+   * autosugerencia): solo entonces se aprende la regla comercio→categoría.
+   */
+  categoryConfirmed?: boolean;
   source?: TransactionSource;
   channel?: string;
   sourceApp?: string;
@@ -115,8 +136,9 @@ function newId(): string {
   return `tx-${Date.now().toString(36)}-${seq}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-/** Registra un gasto/ingreso y aprende la regla de categoría si el usuario eligió una. */
+/** Registra un gasto/ingreso; aprende la regla de categoría si el usuario la confirmó. */
 export async function addExpense(input: NewExpenseInput): Promise<Transaction> {
+  await initStore();
   const now = Date.now();
   const shape = {
     amount: input.amount,
@@ -139,7 +161,7 @@ export async function addExpense(input: NewExpenseInput): Promise<Transaction> {
     updatedAt: now,
   };
   transactions = [tx, ...transactions];
-  if (input.categoryId && input.counterparty.trim()) {
+  if (input.categoryConfirmed && input.categoryId && input.counterparty.trim()) {
     const learned = learnRule(input.counterparty, input.categoryId, getCategoryRules());
     learnedRules = [
       learned,
@@ -152,6 +174,7 @@ export async function addExpense(input: NewExpenseInput): Promise<Transaction> {
 }
 
 export async function removeExpense(id: string): Promise<void> {
+  await initStore();
   transactions = transactions.filter((t) => t.id !== id);
   notify();
   await persist();
